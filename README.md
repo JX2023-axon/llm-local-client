@@ -7,6 +7,9 @@ A lightweight local web app that keeps Gemini chats organized on disk.
 - Personal-use app that mimics the Gemini web experience for people who prefer API usage.
 - No personal data or API keys are included in this repo; the app reads the key from local environment variables.
 
+## Note
+Unofficial local client that uses the Gemini API; you provide your own API key.
+
 ## What it does
 - Runs a local web UI in your browser.
 - Stores chat history in `data/chatbox.db` (SQLite).
