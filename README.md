@@ -4,7 +4,7 @@ A lightweight local web app that keeps Gemini chats organized on disk.
 
 ## Purpose
 - Lightweight wrapper to call Gemini via API without working in a notebook.
-- Personal-use app that mimics the Gemini web experience for people who prefer API usage instead of a monthly subscription.
+- Personal-use app that mimics the Gemini web experience for people who prefer API usage.
 - No personal data or API keys are included in this repo; the app reads the key from local environment variables.
 
 ## What it does
