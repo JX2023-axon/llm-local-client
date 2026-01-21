@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Gemini Chatbox</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500&family=Space+Grotesk:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css"
+    />
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <div class="app">
+      <aside class="sidebar">
+        <div class="brand">
+          <div class="brand-mark">GC</div>
+          <div>
+            <div class="brand-title">Gemini Chatbox</div>
+            <div class="brand-subtitle">Local history, fast access</div>
+          </div>
+        </div>
+        <button class="primary" id="newChatBtn">New Chat</button>
+        <div class="section">
+          <div class="section-title">Chats</div>
+          <div class="chat-list" id="chatList"></div>
+        </div>
+        <div class="section">
+          <div class="section-title">Models</div>
+          <div class="model-add">
+            <input id="modelNameInput" placeholder="Add model" />
+            <button class="ghost" id="addModelBtn">Add</button>
+          </div>
+          <div class="model-list" id="modelList"></div>
+        </div>
+      </aside>
+
+      <main class="main">
+        <header class="topbar">
+          <div class="chat-title" id="chatTitle">Select a chat</div>
+          <div class="model-select">
+            <label for="modelSelect">Model</label>
+            <select id="modelSelect"></select>
+          </div>
+        </header>
+
+        <section class="messages" id="messages"></section>
+
+        <footer class="composer">
+          <textarea
+            id="messageInput"
+            placeholder="Ask Gemini anything..."
+            rows="1"
+          ></textarea>
+          <button class="primary" id="sendBtn">Send</button>
+        </footer>
+      </main>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+    <script src="/static/app.js"></script>
+  </body>
+</html>

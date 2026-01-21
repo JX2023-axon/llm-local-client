@@ -1,0 +1,363 @@
+:root {
+  color-scheme: light;
+  --ink: #121212;
+  --muted: #58606a;
+  --surface: #ffffff;
+  --surface-alt: #f7f5f1;
+  --accent: #f65c32;
+  --accent-strong: #d94a26;
+  --shadow: rgba(20, 20, 20, 0.12);
+  --stroke: rgba(18, 18, 18, 0.08);
+  --radius: 18px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: "IBM Plex Sans", sans-serif;
+  color: var(--ink);
+  background: radial-gradient(circle at top, #f9efe7 0%, #f4f0ea 40%, #efebe6 100%);
+  min-height: 100vh;
+}
+
+.app {
+  display: grid;
+  grid-template-columns: 320px 1fr;
+  min-height: 100vh;
+}
+
+.sidebar {
+  padding: 28px 24px;
+  background: linear-gradient(160deg, #ffffff 0%, #f7f4ef 70%);
+  border-right: 1px solid var(--stroke);
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.brand {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+}
+
+.brand-mark {
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #ff7c4a 0%, #f65c32 70%);
+  color: white;
+  display: grid;
+  place-items: center;
+  font-family: "Space Grotesk", sans-serif;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+
+.brand-title {
+  font-family: "Space Grotesk", sans-serif;
+  font-weight: 600;
+  font-size: 18px;
+}
+
+.brand-subtitle {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.section-title {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 1.4px;
+  color: var(--muted);
+}
+
+.primary,
+.ghost {
+  border: none;
+  border-radius: 999px;
+  padding: 10px 16px;
+  font-family: "Space Grotesk", sans-serif;
+  font-weight: 500;
+  cursor: pointer;
+  transition: transform 0.12s ease, box-shadow 0.2s ease, background 0.2s ease;
+}
+
+.primary {
+  background: var(--accent);
+  color: white;
+  box-shadow: 0 12px 24px rgba(246, 92, 50, 0.2);
+}
+
+.primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 16px 30px rgba(246, 92, 50, 0.25);
+}
+
+.ghost {
+  background: transparent;
+  border: 1px solid var(--stroke);
+  color: var(--ink);
+}
+
+.chat-list,
+.model-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 280px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.chat-item {
+  border-radius: 12px;
+  padding: 10px 12px;
+  background: transparent;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: background 0.2s ease, border 0.2s ease;
+}
+
+.chat-item.active {
+  background: var(--surface);
+  border-color: var(--stroke);
+  box-shadow: 0 8px 20px var(--shadow);
+}
+
+.chat-item-title {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.chat-item-meta {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.model-add {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+}
+
+.model-add input {
+  border-radius: 999px;
+  border: 1px solid var(--stroke);
+  padding: 8px 12px;
+  font-family: inherit;
+}
+
+.model-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--stroke);
+  background: var(--surface);
+}
+
+.model-actions button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.main {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.topbar {
+  padding: 24px 32px 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.chat-title {
+  font-family: "Space Grotesk", sans-serif;
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.model-select {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.model-select select {
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--stroke);
+  font-family: inherit;
+}
+
+.messages {
+  flex: 1;
+  padding: 20px 32px 120px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  overflow-y: auto;
+}
+
+.message {
+  max-width: 70%;
+  padding: 14px 18px;
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: 0 12px 24px var(--shadow);
+  animation: rise 0.3s ease;
+}
+
+.message.user {
+  align-self: flex-end;
+  background: #fff3ee;
+  border: 1px solid #ffd4c4;
+}
+
+.message.model {
+  align-self: flex-start;
+  border: 1px solid var(--stroke);
+}
+
+.message-role {
+  font-size: 11px;
+  color: var(--muted);
+  margin-bottom: 6px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.message-content {
+  white-space: pre-wrap;
+  line-height: 1.5;
+}
+
+.message-content h1,
+.message-content h2,
+.message-content h3 {
+  font-family: "Space Grotesk", sans-serif;
+  margin: 0 0 6px;
+}
+
+.message-content h3 {
+  font-size: 16px;
+}
+
+.message-content p {
+  margin: 0 0 6px;
+}
+
+.message-content ul,
+.message-content ol {
+  margin: 0 0 6px 18px;
+  padding: 0;
+}
+
+.message-content li {
+  margin-bottom: 4px;
+}
+
+.message-content strong {
+  font-weight: 600;
+}
+
+.message-content code {
+  font-family: "IBM Plex Mono", monospace;
+  background: #fff7f2;
+  border: 1px solid #ffd4c4;
+  border-radius: 6px;
+  padding: 2px 6px;
+}
+
+.message-content pre {
+  background: #111111;
+  color: #f4f4f4;
+  padding: 12px;
+  border-radius: 12px;
+  overflow-x: auto;
+}
+
+.message-content pre code {
+  background: transparent;
+  border: none;
+  padding: 0;
+  color: inherit;
+}
+
+.composer {
+  position: fixed;
+  bottom: 24px;
+  right: 32px;
+  left: 352px;
+  background: var(--surface);
+  border-radius: 999px;
+  padding: 12px 18px;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 12px;
+  box-shadow: 0 20px 40px var(--shadow);
+  border: 1px solid var(--stroke);
+}
+
+.composer textarea {
+  border: none;
+  resize: none;
+  font-family: inherit;
+  font-size: 15px;
+  outline: none;
+  background: transparent;
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (max-width: 900px) {
+  .app {
+    grid-template-columns: 1fr;
+  }
+
+  .sidebar {
+    position: fixed;
+    inset: 0 0 auto 0;
+    height: auto;
+    z-index: 10;
+    border-right: none;
+    border-bottom: 1px solid var(--stroke);
+  }
+
+  .main {
+    padding-top: 360px;
+  }
+
+  .composer {
+    left: 24px;
+    right: 24px;
+  }
+}
