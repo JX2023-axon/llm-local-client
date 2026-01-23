@@ -4,15 +4,24 @@ const state = {
   activeChatId: null,
   activeModel: null,
   pending: false,
+  archivedChats: [],
 };
 
-const chatList = document.getElementById("chatList");
-const messagesEl = document.getElementById("messages");
-const chatTitleEl = document.getElementById("chatTitle");
-const modelSelect = document.getElementById("modelSelect");
-const modelList = document.getElementById("modelList");
-const modelNameInput = document.getElementById("modelNameInput");
-const messageInput = document.getElementById("messageInput");
+let chatList, archivedList, messagesEl, chatTitleEl, modelSelect, modelList, modelNameInput, messageInput;
+
+function initDOM() {
+  chatList = document.getElementById("chatList");
+  archivedList = document.getElementById("archivedList");
+  messagesEl = document.getElementById("messages");
+  chatTitleEl = document.getElementById("chatTitle");
+  modelSelect = document.getElementById("modelSelect");
+  modelList = document.getElementById("modelList");
+  modelNameInput = document.getElementById("modelNameInput");
+  messageInput = document.getElementById("messageInput");
+  
+  // Attach event listeners now that DOM is ready
+  attachEventListeners();
+}
 
 if (window.marked) {
   marked.setOptions({ breaks: true, gfm: true });
@@ -49,11 +58,115 @@ function renderChats() {
     meta.className = "chat-item-meta";
     meta.textContent = formatTime(chat.updated_at);
 
+    const actions = document.createElement("div");
+    actions.className = "chat-item-actions";
+
+    const renameBtn = document.createElement("button");
+    renameBtn.className = "ghost small";
+    renameBtn.textContent = "Rename";
+    renameBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      renameChat(chat.id, chat.title);
+    });
+
+    const archiveBtn = document.createElement("button");
+    archiveBtn.className = "ghost small";
+    archiveBtn.textContent = "Archive";
+    archiveBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      archiveChat(chat.id);
+    });
+
+    const deleteBtn = document.createElement("button");
+    deleteBtn.className = "ghost small delete";
+    deleteBtn.textContent = "Delete";
+    deleteBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      deleteChat(chat.id);
+    });
+
+    actions.appendChild(renameBtn);
+    actions.appendChild(archiveBtn);
+    actions.appendChild(deleteBtn);
+
     item.appendChild(title);
     item.appendChild(meta);
+    item.appendChild(actions);
     chatList.appendChild(item);
   });
 }
+
+function renderArchived() {
+  if (!archivedList) return;
+  archivedList.innerHTML = "";
+  state.archivedChats.forEach((chat) => {
+    const item = document.createElement("div");
+    item.className = "chat-item";
+
+    const title = document.createElement("div");
+    title.className = "chat-item-title";
+    title.textContent = chat.title;
+
+    const meta = document.createElement("div");
+    meta.className = "chat-item-meta";
+    meta.textContent = formatTime(chat.updated_at);
+
+    const actions = document.createElement("div");
+    actions.className = "chat-item-actions";
+
+    const renameBtn = document.createElement("button");
+    renameBtn.className = "ghost small";
+    renameBtn.textContent = "Rename";
+    renameBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      renameChat(chat.id, chat.title);
+    });
+
+    const restoreBtn = document.createElement("button");
+    restoreBtn.className = "ghost small";
+    restoreBtn.textContent = "Restore";
+    restoreBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      restoreChat(chat.id);
+    });
+
+    const deleteBtn = document.createElement("button");
+    deleteBtn.className = "ghost small delete";
+    deleteBtn.textContent = "Delete";
+    deleteBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      deleteChat(chat.id);
+    });
+
+    actions.appendChild(renameBtn);
+    actions.appendChild(restoreBtn);
+    actions.appendChild(deleteBtn);
+
+    item.appendChild(title);
+    item.appendChild(meta);
+    item.appendChild(actions);
+    archivedList.appendChild(item);
+  });
+}
+
+async function renameChat(chatId, currentTitle) {
+  const title = prompt("Rename chat", currentTitle || "");
+  if (!title || title.trim() === currentTitle) return;
+  try {
+    const data = await api(`/api/chats/${chatId}/title`, {
+      method: "PUT",
+      body: JSON.stringify({ title: title.trim() }),
+    });
+    // Update state and UI
+    await loadChats();
+    if (state.activeChatId === chatId) {
+      chatTitleEl.textContent = data.chat.title;
+    }
+  } catch (err) {
+    alert("Failed to rename chat: " + err.message);
+  }
+}
+
 
 function renderModels() {
   modelList.innerHTML = "";
@@ -147,9 +260,52 @@ async function loadModels() {
 async function loadChats() {
   const data = await api("/api/chats");
   state.chats = data.chats;
+  
+  // Load archived chats
+  const archivedData = await api("/api/chats/archived/list");
+  state.archivedChats = archivedData.chats;
+  
   renderChats();
+  renderArchived();
   if (!state.activeChatId && state.chats.length) {
     selectChat(state.chats[0].id);
+  }
+}
+
+async function archiveChat(chatId) {
+  if (!confirm("Archive this chat?")) return;
+  try {
+    await api(`/api/chats/${chatId}/archive`, { method: "PUT" });
+    if (state.activeChatId === chatId) {
+      state.activeChatId = null;
+      renderMessages([]);
+    }
+    await loadChats();
+  } catch (err) {
+    alert("Failed to archive chat: " + err.message);
+  }
+}
+
+async function restoreChat(chatId) {
+  try {
+    await api(`/api/chats/${chatId}/restore`, { method: "PUT" });
+    await loadChats();
+  } catch (err) {
+    alert("Failed to restore chat: " + err.message);
+  }
+}
+
+async function deleteChat(chatId) {
+  if (!confirm("Delete this chat permanently?")) return;
+  try {
+    await api(`/api/chats/${chatId}`, { method: "DELETE" });
+    if (state.activeChatId === chatId) {
+      state.activeChatId = null;
+      renderMessages([]);
+    }
+    await loadChats();
+  } catch (err) {
+    alert("Failed to delete chat: " + err.message);
   }
 }
 
@@ -253,22 +409,38 @@ async function sendMessage() {
   }
 }
 
-modelSelect.addEventListener("change", (event) => {
-  state.activeModel = event.target.value;
-});
-
-messageInput.addEventListener("keydown", (event) => {
-  if (event.key === "Enter" && !event.shiftKey) {
-    event.preventDefault();
-    sendMessage();
+function attachEventListeners() {
+  if (modelSelect) {
+    modelSelect.addEventListener("change", (event) => {
+      state.activeModel = event.target.value;
+    });
   }
-});
 
-document.getElementById("newChatBtn").addEventListener("click", createChat);
-document.getElementById("addModelBtn").addEventListener("click", addModel);
-document.getElementById("sendBtn").addEventListener("click", sendMessage);
+  if (messageInput) {
+    messageInput.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" && !event.shiftKey) {
+        event.preventDefault();
+        sendMessage();
+      }
+    });
+  }
+  // no manage panel listeners
+
+  const newChatBtn = document.getElementById("newChatBtn");
+  const addModelBtn = document.getElementById("addModelBtn");
+  const sendBtn = document.getElementById("sendBtn");
+
+  if (newChatBtn) newChatBtn.addEventListener("click", createChat);
+  if (addModelBtn) addModelBtn.addEventListener("click", addModel);
+  if (sendBtn) sendBtn.addEventListener("click", sendMessage);
+}
 
 (async function init() {
+  console.log("=== App initializing ===");
+  initDOM();
+  console.log("=== DOM initialized ===");
   await loadModels();
+  console.log("=== Models loaded ===");
   await loadChats();
+  console.log("=== Chats loaded ===");
 })();

@@ -35,14 +35,19 @@ def _get_db() -> sqlite3.Connection:
 def _init_db() -> None:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     with _get_db() as conn:
-        conn.executescript(
+        # Create tables without archived column first
+        conn.execute(
             """
             CREATE TABLE IF NOT EXISTS models (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 name TEXT NOT NULL UNIQUE,
                 created_at TEXT NOT NULL
-            );
-
+            )
+            """
+        )
+        
+        conn.execute(
+            """
             CREATE TABLE IF NOT EXISTS chats (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 title TEXT NOT NULL,
@@ -50,8 +55,12 @@ def _init_db() -> None:
                 last_model TEXT,
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL
-            );
-
+            )
+            """
+        )
+        
+        conn.execute(
+            """
             CREATE TABLE IF NOT EXISTS messages (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 chat_id INTEGER NOT NULL,
@@ -59,11 +68,20 @@ def _init_db() -> None:
                 content TEXT NOT NULL,
                 created_at TEXT NOT NULL,
                 FOREIGN KEY(chat_id) REFERENCES chats(id)
-            );
-
-            CREATE INDEX IF NOT EXISTS idx_messages_chat_id ON messages(chat_id);
+            )
             """
         )
+        
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_messages_chat_id ON messages(chat_id)")
+        
+        # Migration: Add archived column if it doesn't exist
+        try:
+            conn.execute("SELECT archived FROM chats LIMIT 1")
+        except sqlite3.OperationalError:
+            # Column doesn't exist, add it
+            conn.execute("ALTER TABLE chats ADD COLUMN archived BOOLEAN DEFAULT 0")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_chats_archived ON chats(archived)")
+        
         existing = conn.execute("SELECT COUNT(*) FROM models").fetchone()[0]
         if existing == 0:
             now = _utc_now()
@@ -78,11 +96,33 @@ def _fetch_models(conn: sqlite3.Connection) -> list[dict]:
     return [dict(row) for row in rows]
 
 
-def _fetch_chats(conn: sqlite3.Connection) -> list[dict]:
-    rows = conn.execute(
-        "SELECT id, title, interaction_id, last_model, created_at, updated_at "
-        "FROM chats ORDER BY updated_at DESC"
-    ).fetchall()
+def _fetch_chats(conn: sqlite3.Connection, include_archived: bool = False) -> list[dict]:
+    # Check if archived column exists
+    cursor = conn.execute("PRAGMA table_info(chats)")
+    columns = [row[1] for row in cursor.fetchall()]
+    has_archived = 'archived' in columns
+    
+    if has_archived:
+        if include_archived:
+            rows = conn.execute(
+                "SELECT id, title, interaction_id, last_model, archived, created_at, updated_at "
+                "FROM chats ORDER BY updated_at DESC"
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT id, title, interaction_id, last_model, archived, created_at, updated_at "
+                "FROM chats WHERE archived = 0 ORDER BY updated_at DESC"
+            ).fetchall()
+    else:
+        # Old schema without archived column
+        rows = conn.execute(
+            "SELECT id, title, interaction_id, last_model, created_at, updated_at "
+            "FROM chats ORDER BY updated_at DESC"
+        ).fetchall()
+        # Add archived=0 to the results
+        rows = [dict(row) | {"archived": 0} for row in rows]
+        return rows
+    
     return [dict(row) for row in rows]
 
 
@@ -115,46 +155,117 @@ def _is_uuid(value: str) -> bool:
 
 
 def _run_interaction(
-    model_name: str, content: str, previous_interaction_id: str | None
+    model_name: str,
+    content: str,
+    previous_interaction_id: str | None,
+    history: list[tuple[str, str]] | None = None,
 ) -> tuple[str, str]:
     _ensure_api_key()
     client = genai.Client()
     use_agent = model_name.startswith("deep-research")
 
     if use_agent:
-        interaction = client.interactions.create(
-            input=content,
-            agent=model_name,
-            previous_interaction_id=previous_interaction_id,
-            background=True,
-        )
-        interaction_id = interaction.id
-        for _ in range(60):
-            interaction = client.interactions.get(interaction_id)
-            status = interaction.status
-            if status == "completed":
-                break
-            if status in ["failed", "cancelled"]:
-                raise HTTPException(status_code=502, detail=f"Deep research {status}.")
-            time.sleep(2)
-        else:
-            raise HTTPException(
-                status_code=504,
-                detail="Deep research is still running. Try again shortly.",
+        # Reuse existing session when provided; otherwise create new one.
+        session_id = previous_interaction_id
+        if not session_id:
+            created = client.agentic.create_session(agent=model_name)
+            session_id = created.session_id
+        # If we don't have an existing session history, inject local chat history into the first turn
+        message_to_send = content
+        if not previous_interaction_id and history:
+            turns = []
+            for r, t in history[-20:]:
+                label = "User" if r == "user" else "Assistant"
+                turns.append(f"{label}: {t}")
+            turns.append(f"User: {content}")
+            message_to_send = "\n".join(turns)
+        try:
+            response = client.agentic.send_message(
+                session_id=session_id,
+                message=message_to_send,
             )
-        outputs = interaction.outputs or []
+            interaction_id = session_id
+            text = response.text or ""
+        except Exception:
+            # Session might be invalid/expired. Create a fresh session and retry once.
+            try:
+                created = client.agentic.create_session(agent=model_name)
+                session_id = created.session_id
+                # Retry with the prepared first-turn message
+                response = client.agentic.send_message(
+                    session_id=session_id,
+                    message=message_to_send,
+                )
+                interaction_id = session_id
+                text = response.text or ""
+            except Exception:
+                # Final fallback: stateless with injected history
+                prompt = content
+                if history:
+                    turns = []
+                    for r, t in history[-20:]:
+                        label = "User" if r == "user" else "Assistant"
+                        turns.append(f"{label}: {t}")
+                    turns.append(f"User: {content}")
+                    prompt = "\n".join(turns)
+                response = client.models.generate_content(model=model_name, contents=prompt)
+                interaction_id = ""
+                text = response.text or ""
     else:
-        interaction = client.interactions.create(
-            model=model_name,
-            input=content,
-            previous_interaction_id=previous_interaction_id,
-        )
-        interaction_id = interaction.id
-        outputs = interaction.outputs or []
+        # Prefer interactions API for regular models if available; fall back to prompt-history.
+        try:
+            interactions = getattr(client, "interactions")
+        except AttributeError:
+            interactions = None
 
-    if not outputs:
-        raise HTTPException(status_code=502, detail="Gemini returned no output.")
-    text = outputs[-1].text or ""
+        if interactions is not None:
+            try:
+                # If starting a fresh interaction, inject local history into the first input
+                prepared_input = content
+                if not previous_interaction_id and history:
+                    turns = []
+                    for r, t in history[-20:]:
+                        label = "User" if r == "user" else "Assistant"
+                        turns.append(f"{label}: {t}")
+                    turns.append(f"User: {content}")
+                    prepared_input = "\n".join(turns)
+
+                kwargs: dict = {"model": model_name, "input": prepared_input}
+                if previous_interaction_id:
+                    kwargs["previous_interaction_id"] = previous_interaction_id
+                interaction = interactions.create(**kwargs)
+                interaction_id = interaction.id or ""
+                # interactions API returns outputs list
+                output = interaction.outputs[-1] if getattr(interaction, "outputs", None) else None
+                text = getattr(output, "text", "") or ""
+            except Exception:
+                # Fallback to history-based prompting
+                prompt = content
+                if history:
+                    turns = []
+                    for r, t in history[-20:]:
+                        label = "User" if r == "user" else "Assistant"
+                        turns.append(f"{label}: {t}")
+                    turns.append(f"User: {content}")
+                    prompt = "\n".join(turns)
+                response = client.models.generate_content(model=model_name, contents=prompt)
+                interaction_id = ""
+                text = response.text or ""
+        else:
+            # Build a simple conversational prompt from history for context
+            prompt = content
+            if history:
+                turns = []
+                for r, t in history[-20:]:  # cap to last 20 messages
+                    label = "User" if r == "user" else "Assistant"
+                    turns.append(f"{label}: {t}")
+                turns.append(f"User: {content}")
+                prompt = "\n".join(turns)
+
+            response = client.models.generate_content(model=model_name, contents=prompt)
+            interaction_id = ""
+            text = response.text or ""
+
     if not text.strip():
         raise HTTPException(status_code=502, detail="Gemini returned an empty response.")
     return text, interaction_id
@@ -280,6 +391,77 @@ def delete_chat(chat_id: int) -> dict:
     return {"deleted": True}
 
 
+@app.put("/api/chats/{chat_id}/title")
+def rename_chat(chat_id: int, payload: dict) -> dict:
+    """Rename a chat title and update the timestamp."""
+    title = (payload.get("title") or "").strip()
+    if not title:
+        raise HTTPException(status_code=400, detail="Title is required.")
+    if len(title) > 200:
+        raise HTTPException(status_code=400, detail="Title too long (max 200 characters).")
+
+    with _get_db() as conn:
+        now = _utc_now()
+        cursor = conn.execute(
+            "UPDATE chats SET title = ?, updated_at = ? WHERE id = ?",
+            (title, now, chat_id),
+        )
+        if cursor.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Chat not found.")
+        chat_row = conn.execute(
+            "SELECT id, title, interaction_id, last_model, created_at, updated_at FROM chats WHERE id = ?",
+            (chat_id,),
+        ).fetchone()
+    return {"chat": dict(chat_row)}
+
+
+@app.put("/api/chats/{chat_id}/archive")
+def archive_chat(chat_id: int) -> dict:
+    """Archive a chat (hide from main list but keep in archive)"""
+    with _get_db() as conn:
+        cursor = conn.execute(
+            "UPDATE chats SET archived = 1, updated_at = ? WHERE id = ?",
+            (_utc_now(), chat_id)
+        )
+        if cursor.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Chat not found.")
+        chat_row = conn.execute(
+            "SELECT id, title, interaction_id, last_model, archived, created_at, updated_at "
+            "FROM chats WHERE id = ?",
+            (chat_id,),
+        ).fetchone()
+    return {"chat": dict(chat_row), "archived": True}
+
+
+@app.put("/api/chats/{chat_id}/restore")
+def restore_chat(chat_id: int) -> dict:
+    """Restore an archived chat back to main list"""
+    with _get_db() as conn:
+        cursor = conn.execute(
+            "UPDATE chats SET archived = 0, updated_at = ? WHERE id = ?",
+            (_utc_now(), chat_id)
+        )
+        if cursor.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Chat not found.")
+        chat_row = conn.execute(
+            "SELECT id, title, interaction_id, last_model, archived, created_at, updated_at "
+            "FROM chats WHERE id = ?",
+            (chat_id,),
+        ).fetchone()
+    return {"chat": dict(chat_row), "archived": False}
+
+
+@app.get("/api/chats/archived/list")
+def list_archived_chats() -> dict:
+    """Get all archived chats"""
+    with _get_db() as conn:
+        rows = conn.execute(
+            "SELECT id, title, interaction_id, last_model, archived, created_at, updated_at "
+            "FROM chats WHERE archived = 1 ORDER BY updated_at DESC"
+        ).fetchall()
+    return {"chats": [dict(row) for row in rows]}
+
+
 @app.post("/api/chats/{chat_id}/messages")
 def send_message(chat_id: int, payload: dict) -> dict:
     content = (payload.get("content") or "").strip()
@@ -303,12 +485,15 @@ def send_message(chat_id: int, payload: dict) -> dict:
         )
 
     interaction_id = chat_row["interaction_id"] or ""
-    previous_interaction_id = None
-    if interaction_id and not _is_uuid(interaction_id):
-        previous_interaction_id = interaction_id
+    previous_interaction_id = interaction_id or None
+
+    # Fetch full message history for context
+    with _get_db() as conn2:
+        rows = _fetch_messages(conn2, chat_id)
+    history: list[tuple[str, str]] = [(row["role"], row["content"]) for row in rows]
 
     reply_text, interaction_id = _run_interaction(
-        model_name, content, previous_interaction_id
+        model_name, content, previous_interaction_id, history
     )
 
     with _get_db() as conn:

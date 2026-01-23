@@ -15,18 +15,24 @@
   box-sizing: border-box;
 }
 
+html,
+body {
+  height: 100%;
+}
+
 body {
   margin: 0;
   font-family: "IBM Plex Sans", sans-serif;
   color: var(--ink);
   background: radial-gradient(circle at top, #f9efe7 0%, #f4f0ea 40%, #efebe6 100%);
-  min-height: 100vh;
+  overflow: hidden;
 }
 
 .app {
   display: grid;
   grid-template-columns: 320px 1fr;
-  min-height: 100vh;
+  height: 100vh;
+  overflow: hidden;
 }
 
 .sidebar {
@@ -36,6 +42,10 @@ body {
   display: flex;
   flex-direction: column;
   gap: 20px;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow-y: auto;
 }
 
 .brand {
@@ -120,12 +130,17 @@ body {
 }
 
 .chat-item {
+  position: relative;
   border-radius: 12px;
   padding: 10px 12px;
   background: transparent;
   border: 1px solid transparent;
   cursor: pointer;
   transition: background 0.2s ease, border 0.2s ease;
+}
+
+.chat-item:hover {
+  background: var(--surface-alt);
 }
 
 .chat-item.active {
@@ -143,6 +158,24 @@ body {
   font-size: 11px;
   color: var(--muted);
 }
+
+.chat-item-actions {
+  margin-top: 6px;
+  display: flex;
+  gap: 6px;
+}
+
+.ghost.small {
+  padding: 4px 10px;
+  font-size: 12px;
+}
+
+.ghost.small.delete {
+  color: #b00020;
+  border-color: rgba(176, 0, 32, 0.2);
+}
+
+/* removed legacy manage panel styles */
 
 .model-add {
   display: grid;
@@ -178,7 +211,8 @@ body {
 .main {
   display: flex;
   flex-direction: column;
-  min-height: 100vh;
+  height: 100vh;
+  overflow: hidden;
 }
 
 .topbar {
@@ -339,8 +373,14 @@ body {
 }
 
 @media (max-width: 900px) {
+  body {
+    overflow: auto;
+  }
+
   .app {
     grid-template-columns: 1fr;
+    height: auto;
+    overflow: visible;
   }
 
   .sidebar {
@@ -350,10 +390,13 @@ body {
     z-index: 10;
     border-right: none;
     border-bottom: 1px solid var(--stroke);
+    overflow: visible;
   }
 
   .main {
     padding-top: 360px;
+    height: auto;
+    overflow: visible;
   }
 
   .composer {
